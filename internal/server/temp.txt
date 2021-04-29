@@ -1,0 +1,13 @@
+curl -X POST localhost:8080 -d '{"record": {"value": "TGV0J3MgR28gIzEK"}}'
+curl -X POST localhost:8080 -d '{"record": {"value": "TGV0J3MgR28gIzIK"}}'
+curl -X POST localhost:8080 -d '{"record": {"value": "TGV0J3MgR28gIzMK"}}'
+
+wget https://github.com/protocolbuffers/protobuf/​releases/download/v3.9.0/protoc-3.9.0-osx-x86_64.zip
+
+protoc *​.proto ​​--go_out=.
+
+protoc -I=$SRC_DIR --go_out=$DST_DIR $SRC_DIR/log.proto
+
+protoc api/v1/​*​.proto  --go_out=.  --go_opt=paths=source_relative --proto_path=.
+
+protoc api/v1/log.proto --go_out=. --proto_path=. --go_opt=paths=source_relative

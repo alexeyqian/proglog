@@ -57,6 +57,7 @@ func (s *store) Append(p []byte) (n uint64, pos uint64, err error){
 	return uint64(w), pos, nil
 }
 
+// each record is stored as [size+record_data] as an entity in store.
 func (s *store) Read(pos uint64) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

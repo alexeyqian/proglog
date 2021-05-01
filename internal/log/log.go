@@ -166,3 +166,61 @@ func (log *Log)HighestOffset()(uint64, error){
 
 	return off - 1, nil
 }
+
+// removes all segments whose highese offset is lower than parameter:lowest
+func (log *Log) Truncate(lowest uint64) error {
+	log.mu.Lock()
+	defer log.mu.Unlock()
+
+	var segments []*segment
+	for _, s := range log.segments{
+		if s.nextOffset <= lowest + 1 {
+			if err := s.Remove(); err != nil {
+				return err
+			}
+			continue
+		}
+		segments = append(segments, s)
+	}
+
+	log.segments = segments
+	return nil
+}
+
+type originReader struct {
+	*store,
+	off int64
+}
+
+// returns an io.Reader to read the whole log.
+func (log *Log) Reader() io.Reader {
+	log.mu.RLock()
+	defer log.mu.RUnlock()
+
+	readers := make([]io.Reader, len(log.segments))
+	for i, segment := range log.segments{
+		readers[i] = &originReader{segment.store, 0}
+	}
+
+	return io.MultiReader(readers...)
+}
+
+func (o *originReader) Read(p []byte)(int, error){
+	n, err := o.ReadAt(p, o.ff)
+	o.off += int64(n)
+	return n, err
+}
+
+func (log *Log) newSegment(off uint64) error {
+	s, err := newSegment(log.Dir, off, log.Config)
+	if err != nil {
+		return err
+	}
+
+	log.segments = append(log.segments, s)
+	log.activeSegment = s
+	return nil
+}
+
+
+

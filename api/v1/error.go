@@ -1,6 +1,6 @@
 package log_v1
 
-import(
+import (
 	"fmt"
 
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -11,23 +11,23 @@ type ErrOffsetOutOfRange struct {
 	Offset uint64
 }
 
-func (e ErrOffsetOutOffRange) GRPCStatus() *status.Status{
+func (e ErrOffsetOutOfRange) GRPCStatus() *status.Status {
 	st := status.New(
 		404,
-		fmt.Sprintf("offset out of range: %d", e.Offset)
+		fmt.Sprintf("offset out of range: %d", e.Offset),
 	)
 
 	msg := fmt.Sprintf(
 		"The requested offset is outside the log's range: %d",
-		e.Offset
+		e.Offset,
 	)
 
 	d := errdetails.LocalizedMessage{
-		Locale: "en-US",
-		Message: msg
+		Locale:  "en-US",
+		Message: msg,
 	}
 
-	std, err := st.WithDetails(d)
+	std, err := st.WithDetails(&d)
 	if err != nil {
 		return st
 	}
@@ -35,6 +35,6 @@ func (e ErrOffsetOutOffRange) GRPCStatus() *status.Status{
 	return std
 }
 
-func (e ErrOffsetOutOffRange) Error() string {
+func (e ErrOffsetOutOfRange) Error() string {
 	return e.GRPCStatus().Err().Error()
 }

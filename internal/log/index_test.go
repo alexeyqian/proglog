@@ -2,7 +2,7 @@ package log
 
 import (
 	"io"
-	"io/iotuil"
+	"io/ioutil"
 	"os"
 	"testing"
 
@@ -10,7 +10,7 @@ import (
 )
 
 func TestIndex(t *testing.T) {
-	f, err := iotuil.TempFile(os.TempDir(), "index_test")
+	f, err := ioutil.TempFile(os.TempDir(), "index_test")
 	require.NoError(t, err)
 	defer os.Remove(f.Name())
 
@@ -19,13 +19,13 @@ func TestIndex(t *testing.T) {
 	idx, err := newIndex(f, c)
 	require.NoError(t, err)
 
-	_,_,err = idx.Read(-1)
+	_, _, err = idx.Read(-1)
 	require.Error(t, err)
 	require.Equal(t, f.Name(), idx.Name())
 
-	entries := []struct{
+	entries := []struct {
 		Off uint32
-		Po uint64
+		Pos uint64
 	}{
 		{Off: 0, Pos: 0},
 		{Off: 1, Pos: 10},
@@ -35,26 +35,24 @@ func TestIndex(t *testing.T) {
 		err = idx.Write(want.Off, want.Pos)
 		require.NoError(t, err)
 
-		_,pos,err := idx.Read(int64(want.Off))
+		_, pos, err := idx.Read(int64(want.Off))
 		require.NoError(t, err)
 		require.Equal(t, want.Pos, pos)
 	}
 
 	// index and scanner should error when reading past existing entries
-	_,_,err = idx.Read(int64(len(entries)))
+	_, _, err = idx.Read(int64(len(entries)))
 	require.Equal(t, io.EOF, err)
-	_ = index.Close()
+	_ = idx.Close()
 
 	// index should build its state from the existing file
-	f, _ = os.OpenFile(f.name(), os.O_RDWR, 0600)
+	f, _ = os.OpenFile(f.Name(), os.O_RDWR, 0600)
 	idx, err = newIndex(f, c)
 	require.NoError(t, err)
-	off, pos, err := idx.Read(-1)
-	require.NoError(t,err)
 
+	off, pos, err := idx.Read(-1)
+	require.NoError(t, err)
 	require.Equal(t, uint32(1), off)
 	require.Equal(t, entries[1].Pos, pos)
-
-	
 
 }

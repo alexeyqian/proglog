@@ -1,20 +1,20 @@
 package log
 
-import(
+import (
 	"io"
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	api "github.com/alexeyqian/proglog/api/v1"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSegment(t *testing.T) {
 	dir, _ := ioutil.TempDir("", "segment-test")
 	defer os.RemoveAll(dir)
 
-	want := api.Record{Value: []byte("hello world")} 
+	want := api.Record{Value: []byte("hello world")}
 
 	c := Config{}
 	c.Segment.MaxStoreBytes = 1024
@@ -35,18 +35,18 @@ func TestSegment(t *testing.T) {
 		require.Equal(t, want.Value, got.Value)
 	}
 
-	_, err = s.Append(want)
+	_, err = s.Append(&want)
 	require.Equal(t, io.EOF, err)
 
 	// maxed index
 	require.True(t, s.IsMaxed())
 
-	c.Segment.MaxStoreBytes = uint64(len(want.Value)*3)
+	c.Segment.MaxStoreBytes = uint64(len(want.Value) * 3)
 	c.Segment.MaxIndexBytes = 1024
 
-	s, err = new Segment(dir, 16, c)
+	s, err = newSegment(dir, 16, c)
 	require.NoError(t, err)
-	
+
 	// maxed store
 	require.True(t, s.IsMaxed())
 

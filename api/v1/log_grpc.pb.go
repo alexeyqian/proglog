@@ -60,7 +60,7 @@ func (c *logClient) ProduceStream(ctx context.Context, opts ...grpc.CallOption) 
 
 type Log_ProduceStreamClient interface {
 	Send(*ProduceRequest) error
-	Recv() (*ConsumeResponse, error)
+	Recv() (*ProduceResponse, error)
 	grpc.ClientStream
 }
 
@@ -72,8 +72,8 @@ func (x *logProduceStreamClient) Send(m *ProduceRequest) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *logProduceStreamClient) Recv() (*ConsumeResponse, error) {
-	m := new(ConsumeResponse)
+func (x *logProduceStreamClient) Recv() (*ProduceResponse, error) {
+	m := new(ProduceResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -193,7 +193,7 @@ func _Log_ProduceStream_Handler(srv interface{}, stream grpc.ServerStream) error
 }
 
 type Log_ProduceStreamServer interface {
-	Send(*ConsumeResponse) error
+	Send(*ProduceResponse) error
 	Recv() (*ProduceRequest, error)
 	grpc.ServerStream
 }
@@ -202,7 +202,7 @@ type logProduceStreamServer struct {
 	grpc.ServerStream
 }
 
-func (x *logProduceStreamServer) Send(m *ConsumeResponse) error {
+func (x *logProduceStreamServer) Send(m *ProduceResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 

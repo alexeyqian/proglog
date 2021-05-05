@@ -17,6 +17,13 @@ gencert:
     certs/server-csr.json | cfssljson -bare server
     mv *.pem *.csr ${CONFIG_PATH}
 
+    cfssl gencert \
+    -ca=ca.pem \
+    -ca-key=ca-key.pem \
+    -config=certs/ca-config.json \
+    -profile=client \
+    certs/client-csr.json|cfssljson -bare client
+
 
 .PHONY: compile
 compile:

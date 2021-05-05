@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	api "github.com/alexeyqian/proglog/api/v1"
+	configx "github.com/alexeyqian/proglog/internal/config"
 	"github.com/alexeyqian/proglog/internal/log"
 
 	"google.golang.org/grpc"
@@ -65,14 +66,15 @@ func setupTest(t *testing.T, fn func(*Config)) (
 	require.NoError(t, err)
 
 	// 1.3 setup new grpc server
-	serverTLSConfig, err = config.SetupTLSConfig(config.TLSConfig{
-		CertFile:      config.ServerCertFile,
-		KeyFile:       config.ServerKeyFile,
-		CAFile:        config.CAFile,
+	serverTLSConfig, err := configx.SetupTLSConfig(configx.TLSConfig{
+		CAFile:        configx.CAFile,
+		CertFile:      configx.ServerCertFile,
+		KeyFile:       configx.ServerKeyFile,
 		ServerAddress: listen.Addr().String(),
+		Server:        true,
 	})
 	require.NoError(t, err)
-	serverCreds := crendentials.NewTLS(serverTLSConfig)
+	serverCreds := credentials.NewTLS(serverTLSConfig)
 
 	server, err := NewGRPCServer(&cfg, grpc.Creds(serverCreds))
 	require.NoError(t, err)
@@ -90,8 +92,10 @@ func setupTest(t *testing.T, fn func(*Config)) (
 	// 2. setup client stub
 
 	// 2.1 setup channel
-	clientTLSConfig, err := config.SetupTLSConfig(config.TLSConfig{
-		CAFile: config.CAFile,
+	clientTLSConfig, err := configx.SetupTLSConfig(configx.TLSConfig{
+		CAFile:   configx.CAFile,
+		CertFile: configx.ClientCertFile,
+		KeyFile:  configx.ClientKeyFile,
 	})
 	require.NoError(t, err)
 

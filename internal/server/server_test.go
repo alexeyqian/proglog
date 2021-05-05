@@ -6,10 +6,13 @@ import (
 	"net"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	api "github.com/alexeyqian/proglog/api/v1"
 	"github.com/alexeyqian/proglog/internal/log"
-	"github.com/stretchr/testify/require"
+
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 type fn func(*testing.T, api.LogClient, *Config)
@@ -39,44 +42,73 @@ func setupTest(t *testing.T, fn func(*Config)) (
 
 	t.Helper()
 
-	// port :0 means auto assign a free port
-	listen, err := net.Listen("tcp", ":0")
-	require.NoError(t, err)
+	// 1 setup server
 
-	clientOptions := []grpc.DialOption{grpc.WithInsecure()}
-	cc, err := grpc.Dial(listen.Addr().String(), clientOptions...)
-	require.NoError(t, err)
-
+	// 1.1 setup commit log
 	dir, err := ioutil.TempDir("", "server-test")
 	require.NoError(t, err)
 
-	clog, err := log.NewLog(dir, log.Config{})
+	commitLog, err := log.NewLog(dir, log.Config{})
 	require.NoError(t, err)
 
 	cfg := Config{
-		CommitLog: clog,
+		CommitLog: commitLog,
 	}
 
 	if fn != nil {
 		fn(&cfg)
 	}
 
-	server, err := NewGRPCServer(&cfg)
+	// 1.2 setup listen
+	// port :0 means auto assign a free port
+	listen, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
+	// 1.3 setup new grpc server
+	serverTLSConfig, err = config.SetupTLSConfig(config.TLSConfig{
+		CertFile:      config.ServerCertFile,
+		KeyFile:       config.ServerKeyFile,
+		CAFile:        config.CAFile,
+		ServerAddress: listen.Addr().String(),
+	})
+	require.NoError(t, err)
+	serverCreds := crendentials.NewTLS(serverTLSConfig)
+
+	server, err := NewGRPCServer(&cfg, grpc.Creds(serverCreds))
+	require.NoError(t, err)
+
+	// 1.4 run blocking serv in go routine
+	// Note that in gRPC-Go, RPCs operate in a blocking/synchronous mode,
+	// which means that the RPC call waits for the server to respond,
+	//and will either return a response or an error.
 	go func() {
 		// Serve is a blocking call, has to run in go routine
 		// otherwise any code below it wouldn't able to run.
 		server.Serve(listen)
 	}()
 
-	client = api.NewLogClient(cc)
+	// 2. setup client stub
 
+	// 2.1 setup channel
+	clientTLSConfig, err := config.SetupTLSConfig(config.TLSConfig{
+		CAFile: config.CAFile,
+	})
+	require.NoError(t, err)
+
+	// use our CA as the client's root CA,will used to verify the server.
+	clientCreds := credentials.NewTLS(clientTLSConfig)
+	//clientOptions := []grpc.DialOption{grpc.WithInsecure()}
+	clientConnection, err := grpc.Dial(listen.Addr().String(), grpc.WithTransportCredentials(clientCreds))
+	require.NoError(t, err)
+	// 2.2 setup client stub intance
+	client = api.NewLogClient(clientConnection)
+
+	// 3. return instances
 	return client, &cfg, func() {
 		server.Stop()
-		cc.Close()
+		clientConnection.Close()
 		listen.Close()
-		clog.Remove()
+		commitLog.Remove()
 	}
 }
 
@@ -87,20 +119,22 @@ func testProduceConsume(t *testing.T, client api.LogClient, config *Config) {
 		Value: []byte("hello world"),
 	}
 
-	prequest := api.ProduceRequest{
+	produceRequest := api.ProduceRequest{
 		Record: &want,
 	}
 
-	produce, err := client.Produce(ctx, &prequest)
+	//We also pass a context.Context object which lets us change our RPC’s behavior if necessary,
+	// such as time-out/cancel an RPC in flight.
+	produceResponse, err := client.Produce(ctx, &produceRequest)
 	require.NoError(t, err)
 
-	crequest := api.ConsumeRequest{
-		Offset: produce.Offset,
+	consumeRequest := api.ConsumeRequest{
+		Offset: produceResponse.Offset,
 	}
-	consume, err := client.Consume(ctx, &crequest)
+	consumeResponse, err := client.Consume(ctx, &consumeRequest)
 	require.NoError(t, err)
-	require.Equal(t, want.Value, consume.Record.Value)
-	require.Equal(t, want.Offset, consume.Record.Offset)
+	require.Equal(t, want.Value, consumeResponse.Record.Value)
+	require.Equal(t, want.Offset, consumeResponse.Record.Offset)
 }
 
 func testConsumePastBoundary(t *testing.T, client api.LogClient, config *Config) {

@@ -1,0 +1,16 @@
+{
+    "CN": "My Awsome CA",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "C": "US",
+            "L": "Austin",
+            "ST": "Texas",
+            "O": "Alexey LLC",
+            "OU": "Development"
+        }
+    ]
+}

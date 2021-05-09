@@ -1,45 +1,51 @@
+CERT_SOURCE=./certs
 CONFIG_PATH=${HOME}/.proglog/
 
-.PHONY: init
 init:
-    mkdir -p ${CONFIG_PATH}
+	mkdir -p ${CONFIG_PATH}
 
-.PHONY: gencert
-gencert:
-    cfssl gencert \ 
-    -initca certs/ca-csr.json | cfssljson -bare ca
+gencert: 
+	${GOBIN}/cfssl gencert -initca ${CERT_SOURCE}/ca-csr.json | cfssljson -bare ca
+	
+	${GOBIN}/cfssl gencert \
+	-ca=ca.pem \
+	-ca-key=ca-key.pem \
+	-config=${CERT_SOURCE}/ca-config.json \
+	-profile=server \
+	${CERT_SOURCE}/server-csr.json | cfssljson -bare server
 
-    cfssl gencert \
-    -ca=ca.pem \
-    -ca-key=ca-key.pem \
-    -config=certs/ca-config.json \
-    -profile=server \
-    certs/server-csr.json | cfssljson -bare server
-    mv *.pem *.csr ${CONFIG_PATH}
+	${GOBIN}/cfssl gencert \
+	-ca=ca.pem \
+	-ca-key=ca-key.pem \
+	-config=${CERT_SOURCE}/ca-config.json \
+	-profile=client \
+	-cn="root" \
+	${CERT_SOURCE}/client-csr.json|cfssljson -bare root-client
 
-    cfssl gencert \
-    -ca=ca.pem \
-    -ca-key=ca-key.pem \
-    -config=certs/ca-config.json \
-    -profile=client \
-    certs/client-csr.json|cfssljson -bare client
+	${GOBIN}/cfssl gencert \
+	-ca=ca.pem \
+	-ca-key=ca-key.pem \
+	-config=${CERT_SOURCE}/ca-config.json \
+	-profile=client \
+	-cn="nobody" \
+	${CERT_SOURCE}/client-csr.json|cfssljson -bare nobody-client
+
+	mv *.pem *.csr ${CONFIG_PATH}
+
+proto: 
+	/usr/local/bin/protoc ./api/v1/*.proto \
+	--go_out=. \
+	--go-grpc_out=. \
+	--go_opt=paths=source_relative \
+	--go-grpc_opt=paths=source_relative \
+	--proto_path=. 
 
 
-.PHONY: compile
-compile:
-    ${GOBIN}/protoc api/v1/*.proto \
-    --go_out=. \
-    --go-grpc_out=. \
-    --go_opt=paths=source_relative \
-    --go-grpc_opt=paths=source_relative \
-    --proto_path=. 
+$(CONFIG_PATH)/model.conf:
+	cp ${CERT_SOURCE}/model.conf $(CONFIG_PATH)/model.conf
 
-.PHONY: test
-test:
-    go test -race ./...
+$(CONFIG_PATH)/policy.csv:
+	cp ${CERT_SOURCE}/policy.csv $(CONFIG_PATH)/policy.csv
 
-#protoc -I=$SRC_DIR --go_out=$DST_DIR $SRC_DIR/addressbook.proto
-#export PATH="$PATH:$(go env GOPATH)/bin"
-#protoc --go_out=. --go_opt=paths=source_relative \
-#    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-#    helloworld/helloworld.proto
+test: $(CONFIG_PATH)/policy.csv $(CONFIG_PATH)/model.conf
+	go test -race ./...

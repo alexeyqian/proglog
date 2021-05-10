@@ -116,6 +116,7 @@ func (m *Membership) isLocal(member serf.Member) bool {
 	return m.serf.LocalMember().Name == member.Name
 }
 
+// returns a point-in-time snapshot of the cluster's Serf members.
 func (m *Membership) Members() []serf.Member {
 	return m.serf.Members()
 }

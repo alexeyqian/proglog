@@ -126,7 +126,14 @@ func (m *Membership) Leave() error {
 }
 
 func (m *Membership) logError(err error, msg string, member serf.Member) {
-	m.logger.Error(
+	// Raft will error and return ErrNotLeader when you try to change the cluster
+	// on non-leader nodes. it's expected, so not log them
+	log := m.logger.Error
+	if err == raft.ErrNotLeader{
+		log = m.logger.Debug
+	}
+
+	log(
 		msg,
 		zap.Error(err),
 		zap.String("name", member.Name),

@@ -200,6 +200,73 @@ func (l *DistributedLog) Read(offset uint64)(*api.Record, error){
 	return l.log.Read(offset)
 }
 
+// our distributed log will act as our Serf membership's handler
+// so we need to implement Join and Leave method to update Raft
+func (l *DistributedLog) Join(id, addr string) error{
+	configFuture := l.raft.GetConfiguration()
+	if err := configFuture.Error(); err != nil{
+		return err
+	}
+
+	serverID := raft.ServerID(id)
+	serverAddr := raft.ServerAddress(addr)
+	// duplication check
+	for _, srv := range configFuture.Configuration().Servers{
+		if srv.ID == serverID || srv.Address == serverAddr{
+			if srv.ID == serverID && srv.Address == serverAddr{
+				return nil // server has already joined
+			}
+
+			// remove the existing server
+			removeFuture := l.raft.RemoveServer(serverID, 0, 0)
+			if err := removeFuture.Error(); err != nil{
+				return err
+			}
+		}
+	}
+
+	addFuture := l.raft.addVoter(serverID, serverAddr, 0, 0)
+	if err := addFuture.Error(); err != nil{
+		return err
+	}
+
+	return nil
+
+}
+
+// removing the leader will trigger a new election
+func (l *DistributedLog) Leave(id string) error {
+	removeFuture := l.raft.RemoveServer(raft.ServerID(id), 0, 0)
+	return removeFuture.Error()
+}
+
+// blocks until the cluster has elected a leader or times out
+// most operations must run on the leader.
+func (l *DistributedLog) WaitForLeader(timeout time.Duration) error{
+	timeoutc := time.After(timeout)
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for{
+		select {
+		case <-timeoutc:
+			return fmt.Errorf("time out")
+		case <-ticker.C:
+			if l := l.raft.Leader(); l != ""{
+				return nil
+			}
+		}
+	}
+}
+
+func (l *DistributedLog) Close() error {
+	f := l.raft.Shutdown()
+	if err := f.Error(); err != nil{
+		return err
+	}
+	return l.log.Close()
+}
+
 type RequestType uint8
 
 const (
@@ -402,6 +469,35 @@ func (s *StreamLayer) Dial(
 	return conn, err
 }
 
+// Accept is a mirror of Dial
+// We accept the incoming connection and read the byte that identifies the connection.
 func (s *StreamLayer) Accept() (net.Conn, error){
-	
+	conn, err := s.ln.Accept()
+	if err != nil{
+		return nil, err
+	}
+
+	b :=make([]byte, 1)
+	_, err = conn.Read(b)
+	if err != nil {
+		return nil, err
+	}
+
+	if bytes.Compare([]byte{byte(RaftRPC)}, b) != 0{
+		return nil, fmt.Errorf("not a raft rpc")
+	}
+
+	if s.serverTLSConfig != nil {
+		return tls.Server(conn, s.serverTLSConfig), nil
+	}
+
+	return conn, nil
+}
+
+func (s *StreamLayer) Close() error{
+	return s.ln.Close()
+}
+
+func (s *StreamLayer) Addr() net.Addr{
+	return s.ln.Addr()
 }
